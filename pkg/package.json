@@ -1,13 +1,13 @@
 {
-  "name": "hello-wgpu",
+  "name": "hello-wgpu-transparency",
   "version": "0.1.0",
   "files": [
-    "hello_wgpu_bg.wasm",
-    "hello_wgpu.js",
-    "hello_wgpu.d.ts"
+    "hello_wgpu_transparency_bg.wasm",
+    "hello_wgpu_transparency.js",
+    "hello_wgpu_transparency.d.ts"
   ],
-  "module": "hello_wgpu.js",
-  "types": "hello_wgpu.d.ts",
+  "module": "hello_wgpu_transparency.js",
+  "types": "hello_wgpu_transparency.d.ts",
   "sideEffects": [
     "./snippets/*"
   ]

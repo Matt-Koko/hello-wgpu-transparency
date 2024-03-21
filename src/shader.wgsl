@@ -18,7 +18,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VOutput {
 
     var out: VOutput;
     out.position = vec4<f32>(pos[in_vertex_index], 0.0, 1.0);
-    out.v_color = vec4<f32>(color[in_vertex_index], 1.0);
+    out.v_color = vec4<f32>(color[in_vertex_index], 0.5);
     return out;
 }
 

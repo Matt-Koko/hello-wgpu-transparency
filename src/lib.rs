@@ -2,11 +2,7 @@ use std::{borrow::Cow, sync::Arc};
 use tracing::{error, info, warn};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-use winit::{
-    event::*,
-    event_loop::EventLoop,
-    window::Window,
-};
+use winit::{event::*, event_loop::EventLoop, window::Window};
 
 struct State {
     surface: wgpu::Surface<'static>,
@@ -63,8 +59,8 @@ impl State {
             push_constant_ranges: &[],
         });
 
-        let swapchain_capabilities = surface.get_capabilities(&adapter);
-        let swapchain_format = swapchain_capabilities.formats[0];
+        let surface_capabilities = surface.get_capabilities(&adapter);
+        let texture_format = surface_capabilities.formats[0];
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -77,7 +73,11 @@ impl State {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(swapchain_format.into())],
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: texture_format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -85,11 +85,31 @@ impl State {
             multiview: None,
         });
 
-        let config = surface
-            .get_default_config(&adapter, size.width, size.height)
-            .unwrap();
-        surface.configure(&device, &config);
+        #[cfg(target_arch = "wasm32")]
+        let alpha_mode = wgpu::CompositeAlphaMode::PreMultiplied;
 
+        #[cfg(not(target_arch = "wasm32"))]
+        let alpha_mode = {
+            use wgpu::CompositeAlphaMode;
+            let supported_alpha_modes = surface_capabilities.alpha_modes;
+                        
+            if supported_alpha_modes.contains(&CompositeAlphaMode::PreMultiplied) {
+                CompositeAlphaMode::PreMultiplied
+            } else if supported_alpha_modes.contains(&CompositeAlphaMode::PostMultiplied) {
+                CompositeAlphaMode::PostMultiplied
+            } else {
+                CompositeAlphaMode::Opaque
+            }
+        };
+
+        let config = wgpu::SurfaceConfiguration {
+            alpha_mode,
+            ..surface
+                .get_default_config(&adapter, size.width, size.height)
+                .unwrap()
+        };
+
+        surface.configure(&device, &config);
 
         Self {
             surface,
@@ -101,16 +121,12 @@ impl State {
         }
     }
 
-    fn resize(
-        &mut self,
-        new_size: winit::dpi::PhysicalSize<u32>,
-    ) {
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.surface
-                .configure(&self.device, &self.config);
+            self.surface.configure(&self.device, &self.config);
         }
     }
 
@@ -130,38 +146,32 @@ impl State {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder =
-            self.device.create_command_encoder(
-                &wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                },
-            );
-            
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
         {
-            let mut render_pass =
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(
-                                wgpu::Color::BLACK,
-                            ),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.draw(0..3, 0..1);
-
         }
 
-        
         self.queue.submit(Some(encoder.finish()));
         output.present();
 
@@ -183,11 +193,13 @@ pub async fn run() {
     info!("debug: info log message");
     warn!("debug: warning log message");
     error!("debug: error log message");
-    
+
     let event_loop = EventLoop::new().unwrap();
 
     #[allow(unused_mut)]
-    let mut builder = winit::window::WindowBuilder::new();
+    let mut builder = winit::window::WindowBuilder::new()
+        .with_title("Hello wgpu!")
+        .with_transparent(true);
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -204,7 +216,6 @@ pub async fn run() {
         builder = builder.with_canvas(Some(canvas));
     }
     let window = builder.build(&event_loop).unwrap();
-    window.set_title("Hello wgpu!");
 
     let window = Arc::new(window);
 
@@ -237,7 +248,6 @@ pub async fn run() {
                             // All other errors (Outdated, Timeout) should be resolved by the next frame
                             Err(e) => eprintln!("{:?}", e),
                         }
-
                     }
                     WindowEvent::CloseRequested => target.exit(),
                     _ => {}
