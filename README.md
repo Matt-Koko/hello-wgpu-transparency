@@ -10,7 +10,7 @@
 ### Description:
 Render the classic RGB triangle (the hello world of computer graphics) to either the web or desktop using Rust, WebAssembly, and Wgpu.
 
-The web build is hosted at: https://hello-wgpu.vercel.app/
+The web build is hosted at: https://hello-wgpu-transparency.vercel.app
 
 ### Run locally:
 Set environment variable to use custom index.html:
